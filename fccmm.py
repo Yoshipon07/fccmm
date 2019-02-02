@@ -101,6 +101,7 @@ def rand_index(u, label_data):
     pre = np.zeros((CLUSTER))  # Precision(適合率):正と予測したデータのうち，実際に正であるものの割合
     rec = np.zeros((CLUSTER))  # Recall(感度):実際に正であるもののうち，正であると予測されたものの割合
     f_macro = np.zeros((CLUSTER))  # F値:正解率と再現率の調和平均
+    ri = np.zeros((CLUSTER))  # Rand-Index 正解クラスと得られたクラスとの一致率
 
     for i in range(OBJECT):
         crisp_u[max_cluster[i]][i] = 1  # 個体をクリスプに割り当てる(1なら帰属、0なら帰属しない)
@@ -141,6 +142,7 @@ def rand_index(u, label_data):
         fp[c] -= tp[c]  # True Positiveを引いて完成
         fn[c] -= tp[c]  # True Positiveを引いて完成
         tn[c] = OBJECT - (tp[c] + fn[c] + fp[c])  # True Negativeの完成
+        ri[c] = (tp[c] + tn[c]) / OBJECT  # Rand-Indexの完成
         if pre[c] == 0.0:
             pre[c] = 0.0
         else:
@@ -153,6 +155,22 @@ def rand_index(u, label_data):
             f_macro[c] = 0.0
         else:
             f_macro[c] = 2.0 * pre[c] * rec[c] / (pre[c] + rec[c])  # F値の算出
+
+    # 以下、出力用のnumpy行列を作成
+    list_above = [""]  # 左上に空白を作成するため
+    list_above_parts = ["TP", "FP", "TN", "FN", "PRE(適合率)", "REC(再現率)", "F_MACRO(F値)", "Rand-Index"]  # 各値の名前を格納
+    list_above = np.append(list_above, ["クラスター" + str(i + 1) for i in range(CLUSTER)])  # クラスターの名前を追加
+    list_above = np.append(list_above, list_above_parts)  # 二つのリストを結合(出力用テーブルの上部完成)
+
+    list_side = ["クラス" + str(i + 1) for i in range(CLUSTER)]  # クラスの名前を格納
+    list_side = np.reshape(list_side, (CLUSTER, 1))  # リストを結合するために変形させる(1列に変形)
+
+    output_table = np.stack((tp, fp, tn, fn, pre, rec, f_macro, ri), axis=1)  # 各値を格納したリストを結合させる(1次元リストから2次元リストへ)
+    output_table = np.concatenate((table, output_table), axis=1)  # 各値を格納したリストを結合させる(2次元同士の結合)
+    output_table = np.hstack((list_side, output_table))  # リストの結合(1次元と2次元のリストを横にくっつける)
+    output_table = np.vstack((list_above, output_table))  # リストの結合(1次元と2次元のリストを縦にくっつける) 出力用のテーブル完成
+
+    return output_table  # 出力用のテーブルを返す
 
 
 # 収束判定:収束閾値よりメンバシップの差が大きければフラグを0(未収束)に戻す
@@ -170,11 +188,13 @@ def judge_convergent(u, pre_u, w, pre_w):
 
 
 # ファイルの書き込み
-def output(u, w):
+def output(u, w, output_table):
     with open(OUTPUT_FILENAME, "a") as o:
         np.savetxt(o, u, delimiter=",", fmt="%.8f")
         o.write("\n")
         np.savetxt(o, w, delimiter=",", fmt="%.8f")
+        o.write("\n")
+        np.savetxt(o, output_table, delimiter=",", fmt="%.8s")  # 文字列も含まれるためフォーマットを"%.8s"にしている
         o.write("\n")
 
 
@@ -199,8 +219,8 @@ for roop in range(ROOP):
         judge_convergent(u, pre_u, w, pre_w)  # 収束判定
         t += 1  # アルゴリズム反復回数をインクリメント
 
-    output(u, w)  # ファイルの書き込み
-    rand_index(u, label_data)
+    output_table = rand_index(u, label_data)  # Rand-Indexなどの値を算出し、出力用のテーブルを作成
+    output(u, w, output_table)  # ファイルの書き込み
     print(u)
     print()
     print(w)
